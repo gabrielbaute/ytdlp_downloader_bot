@@ -48,8 +48,8 @@ RUN groupadd -r appuser -g 1000 && \
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 # Copiar el código fuente garantizando que appuser sea el propietario
-COPY --with-ownership=appuser:appuser main.py /app/main.py
-COPY --with-ownership=appuser:appuser app/ /app/app/
+COPY --chown=appuser:appuser main.py /app/main.py
+COPY --chown=appuser:appuser app/ /app/app/
 
 # Cambiamos al usuario no root por seguridad
 USER appuser
