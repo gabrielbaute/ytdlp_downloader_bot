@@ -19,6 +19,9 @@ class DownloaderBotMessages:
                 "start_success": "<b>🚀 Sistema Operativo</b>\nHola {name}, envía un link.",
                 "ytdlp_ok": "✅ <b>yt-dlp</b> está instalado correctamente.",
                 "ytdlp_fail": "❌ <b>Error:</b> No se encontró el binario.\nUsa /install.",
+                "ytdlp_updated": "✅ <b>yt-dlp</b> actualizado correctamente.",
+                "ytdlp_update_fail": "❌ <b>Error:</b> No se pudo actualizar.",
+                "updating": "⏳ Actualizando binario de yt-dlp...",
                 "ytdlp_version": "<b>yt-dlp</b> versión: {version}",
                 "installing": "⏳ Iniciando instalación de yt-dlp...",
                 "unauthorized": "🚫 Acceso denegado para el ID: {id}"
