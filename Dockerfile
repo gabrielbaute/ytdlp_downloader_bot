@@ -13,9 +13,10 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Sincronizar dependencias usando la caché nativa de uv.
-# Al no usar flags de cross-compilation, uv compilará de forma óptima para el host de Dokploy.
+# Montamos tanto pyproject.toml como uv.lock de forma segura y temporal.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-install-project --no-dev
 
 # ==========================================
@@ -32,7 +33,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 
 # Instalar dependencias del sistema operativo (FFmpeg es requerido por yt-dlp)
-# Se limpia la caché de apt inmediatamente para reducir el espacio en disco
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && apt-get clean \
