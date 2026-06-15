@@ -1,8 +1,7 @@
 # ==========================================
 # Etapa 1: Constructor (Builder Nativo)
 # ==========================================
-# Usamos una imagen nativa de Python Slim para la compilación
-FROM --platform=$BUILDPLATFORM python:3.13-slim AS builder
+FROM python:3.13-slim AS builder
 
 # Evitar la generación de archivos .pyc en la etapa de compilación
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -10,20 +9,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Argumentos automáticos provistos por Docker Buildx / Dokploy
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
-
 # Copiamos el binario de 'uv' directamente desde su imagen oficial optimizada
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Sincronizar dependencias usando cross-compilation limpia mediante uv
+# Sincronizar dependencias usando la caché nativa de uv.
+# Al no usar flags de cross-compilation, uv compilará de forma óptima para el host de Dokploy.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev --target-platform "$TARGETPLATFORM"
+    uv sync --frozen --no-install-project --no-dev
 
 # ==========================================
-# Etapa 2: Imagen Final de Producción (Multi-arquitectura)
+# Etapa 2: Imagen Final de Producción
 # ==========================================
 FROM python:3.13-slim AS runtime
 
@@ -36,13 +32,14 @@ ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 
 # Instalar dependencias del sistema operativo (FFmpeg es requerido por yt-dlp)
+# Se limpia la caché de apt inmediatamente para reducir el espacio en disco
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar el entorno virtual aislado generado en la etapa anterior
-COPY --from=builder /app/.venv /app/..venv
+COPY --from=builder /app/.venv /app/.venv
 
 # Copiar el código fuente de la aplicación
 COPY main.py /app/main.py
