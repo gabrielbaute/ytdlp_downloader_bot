@@ -9,12 +9,12 @@ from telegram import Update, BotCommand, BotCommandScopeChat, InlineKeyboardButt
 from telegram.ext import Application, PicklePersistence, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
 from app.schemas import ChatID
-from app.errors import BotError
 from app.settings import Settings
 from app.enums import DownloadType
 from app.bot.security import restricted
 from app.bot.msg_templates import DownloaderBotMessages
 from app.services import YTDLPInstaller, DownloaderService
+from app.errors import BotError, BinNotFoundError, YTDLPError
 
 class DownloaderBot:
     def __init__(self, settings: Settings):
@@ -61,10 +61,12 @@ class DownloaderBot:
         admin_commands = [
             BotCommand("start", "Panel de control"),
             BotCommand("authorize", "Autorizar un ID de Telegram"),
-            BotCommand("check_ytdlp", "Estado de los binarios"),
-            BotCommand("install", "Instalar/Actualizar yt-dlp")
+            BotCommand("status", "Estado de los binarios"),
+            BotCommand("install", "Instalar/Actualizar yt-dlp"),
+            BotCommand("update", "Actualiza yt-dlp a la última versión estable"),
+            BotCommand("revoke", "Revoca la autorización de un chat (Solo Admin)"), #TODO
         ]
-        await application.bot.set_my_commands(
+        await self.app.bot.set_my_commands(
             admin_commands, 
             scope=BotCommandScopeChat(chat_id=int(self.settings.TELEGRAM_CHAT_ID))
         )
@@ -76,9 +78,10 @@ class DownloaderBot:
         """
         self.app.add_handler(CommandHandler("start", self.start))
         self.app.add_handler(CommandHandler("authorize", self.authorize_user))
-        self.app.add_handler(CommandHandler("check_ytdlp", self.check_ytdlp_bins))
+        self.app.add_handler(CommandHandler("status", self.check_ytdlp_bins))
         self.app.add_handler(CommandHandler("check_version", self.check_ytdlp_version))
         self.app.add_handler(CommandHandler("install", self.install_ytdlp))
+        self.app.add_handler(CommandHandler("update", self.update_ytdlp))
         self.app.add_handler(CommandHandler("stop", self.stop))
         
         # IMPORTANTE: Los botones se capturan con CallbackQueryHandler
@@ -365,6 +368,79 @@ class DownloaderBot:
                 error_details=error_details
             )
 
+    @restricted
+    async def update_ytdlp(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Manejador del comando /update. Comprueba y descarga la versión más reciente de yt-dlp.
+
+        Args:
+            update: Objeto que contiene los datos del evento de actualización de Telegram.
+            context: El contexto de ejecución actual del bot.
+        """
+        # 1. Notificar inmediatamente al administrador que el proceso ha iniciado
+        initial_msg = DownloaderBotMessages.pick_message("updating")
+        progress_message = await update.message.reply_text(
+            initial_msg, 
+            parse_mode="HTML"
+        )
+
+        try:
+            # 2. Ejecutar de forma segura la llamada síncrona en un hilo separado del pool de asyncio
+            # Esto previene que las peticiones web lentas de GitHub congelen el Polling del bot.
+            was_updated: bool = await asyncio.to_thread(self.ytdlp_installer.update_yt_dlp)
+
+            if was_updated:
+                # El binario cambió con éxito. Obtenemos la nueva versión para presentarla.
+                new_version: str | None = await asyncio.to_thread(self.ytdlp_installer.get_version)
+                version_str = new_version if new_version else "Desconocida"
+                
+                success_template = DownloaderBotMessages.pick_message("ytdlp_updated")
+                version_template = DownloaderBotMessages.pick_message("ytdlp_version", args={"version": version_str})
+                
+                final_response = f"{success_template}\n\n{version_template}"
+            else:
+                # El binario ya estaba al día (update_yt_dlp devolvió False)
+                current_version: str | None = await asyncio.to_thread(self.ytdlp_installer.get_version)
+                version_str = current_version if current_version else "Desconocida"
+                
+                final_response = (
+                    "✅ <b>yt-dlp</b> ya se encuentra actualizado en su última versión estable.\n\n"
+                    f"{DownloaderBotMessages.pick_message('ytdlp_version', args={'version': version_str})}"
+                )
+
+            # 3. Editar el mensaje inicial con el resultado exitoso
+            await progress_message.edit_text(final_response, parse_mode="HTML")
+
+        except BinNotFoundError as e:
+            self.logger.warning(f"Intento de actualización fallido: Binario ausente. {e.message}")
+            fail_msg = DownloaderBotMessages.pick_message("ytdlp_fail")
+            await progress_message.edit_text(
+                f"{fail_msg}\n\n<i>Sugerencia: Ejecuta primero /install para inicializar el binario.</i>", 
+                parse_mode="HTML"
+            )
+
+        except YTDLPError as e:
+            self.logger.error(f"Fallo semántico controlado al actualizar yt-dlp: {e.message} - Detalles: {e.details}")
+            error_base = DownloaderBotMessages.pick_message("ytdlp_update_fail")
+            
+            # Notificación técnica detallada para el administrador del sistema
+            admin_alert = DownloaderBotMessages.pick_message(
+                "admin_notification_error", 
+                args={"error_details": f"Clase: {e.__class__.__name__}\nMotivo: {e.message}"}
+            )
+            await progress_message.edit_text(
+                f"{error_base}\n\n{admin_alert}", 
+                parse_mode="HTML"
+            )
+
+        except Exception as e:
+            self.logger.critical(f"Excepción inesperada no controlada en el comando /update: {str(e)}", exc_info=True)
+            error_base = DownloaderBotMessages.pick_message("ytdlp_update_fail")
+            await progress_message.edit_text(
+                f"{error_base}\n\n⚠️ <i>Ocurrió un error inesperado en el servidor. Revisa los logs para más detalles.</i>", 
+                parse_mode="HTML"
+            )
+    
     @restricted
     async def handle_url(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
