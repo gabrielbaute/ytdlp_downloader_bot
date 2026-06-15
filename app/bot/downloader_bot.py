@@ -62,6 +62,7 @@ class DownloaderBot:
             BotCommand("start", "Panel de control"),
             BotCommand("authorize", "Autorizar un ID de Telegram"),
             BotCommand("status", "Estado de los binarios"),
+            BotCommand("check_version", "Muestra qué versión de yt-dlp está instalada"),
             BotCommand("install", "Instalar/Actualizar yt-dlp"),
             BotCommand("update", "Actualiza yt-dlp a la última versión estable"),
             BotCommand("revoke", "Revoca la autorización de un chat (Solo Admin)"), #TODO
