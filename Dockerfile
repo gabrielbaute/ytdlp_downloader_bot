@@ -9,11 +9,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copiamos el binario de 'uv' directamente desde su imagen oficial optimizada
+# Binario de 'uv' directamente desde imagen oficial
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Sincronizar dependencias usando la caché nativa de uv.
-# Montamos tanto pyproject.toml como uv.lock de forma segura y temporal.
+# Sincronización dependencias usando la caché nativa de uv.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -32,21 +31,27 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-# Instalar dependencias del sistema operativo (FFmpeg es requerido por yt-dlp)
+# Instalación de dependencias básicas (ffmpeg requerido por yt-dlp)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar el entorno virtual aislado generado en la etapa anterior
-COPY --from=builder /app/.venv /app/.venv
+# Creación de usuario, grupo sin privilegios y directorio de persistencia unificado
+RUN groupadd -r appuser -g 1000 && \
+    useradd -r -u 1000 -g appuser appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app && \
+    chmod 755 /app/data
 
-# Copiar el código fuente de la aplicación
-COPY main.py /app/main.py
-COPY app/ /app/app/
+# Copiar el entorno virtual asignando la propiedad al usuario ejecutor
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
-# Crear un usuario del sistema sin privilegios por seguridad (No-Root)
-RUN useradd -u 1000 appuser && chown -R appuser:appuser /app
+# Copiar el código fuente garantizando que appuser sea el propietario
+COPY --with-ownership=appuser:appuser main.py /app/main.py
+COPY --with-ownership=appuser:appuser app/ /app/app/
+
+# Cambiamos al usuario no root por seguridad
 USER appuser
 
 # Declarar el punto de entrada invocando el intérprete del entorno virtual
