@@ -1,0 +1,73 @@
+name: Build Windows Executable (Nuitka)
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # Permitido para adjuntar el binario a la Release de GitHub
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv-action@v5
+      with:
+        version: "latest"
+        enable-cache: true
+
+    - name: Install dependencies (including dev tools)
+      # Sincroniza todas las dependencias (dev incluidas) para que Nuitka, pystray, pillow, etc. estén disponibles
+      run: |
+        uv sync --frozen
+
+    - name: Build Windows executable with Nuitka
+      # Usamos el operador "|" de YAML para ejecutar el bloque multi-línea nativo de PowerShell de forma segura
+      run: |
+        uv run python -m nuitka `
+          --standalone `
+          --onefile `
+          --windows-console-mode=disable `
+          --enable-plugin=tk-inter `
+          --include-data-dir=assets=assets `
+          --windows-icon-from-ico=assets/logo_250.png `
+          --nofollow-import-to=mypy `
+          --remove-output `
+          --output-dir=dist `
+          tray.py
+
+    - name: Verify build output
+      shell: bash
+      run: |
+        # Verificamos la existencia dentro de dist/ según tu parámetro --output-dir
+        if [ ! -f dist/tray.exe ]; then
+          echo "Error: No se encontró el archivo ejecutable en dist/tray.exe"
+          exit 1
+        fi
+        # Renombramos el binario para que tenga una presentación más limpia de cara al usuario
+        mv dist/tray.exe dist/BotDownloader.exe
+
+    - name: Upload artifact to Job
+      uses: actions/upload-artifact@v4
+      with:
+        name: BotDownloader-Windows-Nuitka
+        path: dist/BotDownloader.exe
+        if-no-files-found: error
+
+    - name: Release Executable
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: dist/BotDownloader.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
