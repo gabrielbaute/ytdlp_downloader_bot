@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Creación de usuario, grupo sin privilegios y directorio de persistencia unificado
 RUN groupadd -r appuser -g 1000 && \
-    useradd -r -u 1000 -g appuser appuser && \
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser && \
     mkdir -p /app/data && \
     chown -R appuser:appuser /app && \
     chmod 755 /app/data

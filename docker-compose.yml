@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - HOME_DIR=/app/data
       - UID=1000
       - GID=1000
     volumes:
