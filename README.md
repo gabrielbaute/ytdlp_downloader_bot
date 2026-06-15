@@ -49,6 +49,7 @@ Asegúrate de tener instalados en tu servidor Ubuntu:
 * Docker Compose v2
 
 #### `docker-compose.yml`
+Este compose te permitirá construir la imagen localmente.
 ```yaml
 services:
   botdownloader:
@@ -62,6 +63,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - HOME_DIR=/app/data
+      - UID=1000
+      - GID=1000
     volumes:
       - ./data:/app/data
     logging:
@@ -76,7 +79,6 @@ networks:
   downloaderbot_net:
     name: downloaderbot_net
     driver: bridge
-
 ```
 
 ### Comandos para el Despliegue
@@ -102,6 +104,38 @@ docker compose logs -f
 4. **Detener el servicio:**
 ```bash
 docker compose down
+```
+
+5. **Usar la imagen generada en github**
+Si no deseas construir tu propia imagen, sino usar la última generada, puedes simplemente ejecutar este otro compose:
+```yaml
+services:
+  botdownloader:
+    # Apunta a la imagen oficial empaquetada en GitHub Packages (GHCR)
+    image: ghcr.io/gabrielbaute/ytdlp_downloader_bot:latest
+    container_name: botdownloader
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOME_DIR=/app/data
+      - UID=1000
+      - GID=1000
+    volumes:
+      - ./data:/app/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - downloaderbot_net
+
+networks:
+  downloaderbot_net:
+    name: downloaderbot_net
+    driver: bridge
 ```
 ---
 
