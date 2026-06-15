@@ -1,0 +1,25 @@
+services:
+  downloader-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: downloader_bot_app
+    restart: unless-stopped
+    # Pasamos las variables de entorno locales del archivo .env del host
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mapeo del directorio home interno del bot para retener configuraciones, logs e historiales de sesión.
+      # Esto interceptará la ruta por defecto: ~/.botdownloader/
+      - bot_user_data:/home/appuser/.botdownloader
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot_user_data:
+    name: bot_downloader_persistence
