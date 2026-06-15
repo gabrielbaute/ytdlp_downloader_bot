@@ -46,7 +46,7 @@ COPY main.py /app/main.py
 COPY app/ /app/app/
 
 # Crear un usuario del sistema sin privilegios por seguridad (No-Root)
-RUN useradd -u 8888 appuser && chown -R appuser:appuser /app
+RUN useradd -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Declarar el punto de entrada invocando el intérprete del entorno virtual
